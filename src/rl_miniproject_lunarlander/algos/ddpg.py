@@ -25,8 +25,7 @@ from ..losses.critic_losses import compute_critic_loss
 
 def run_ddpg(cfg: DDPGConfig) -> Evaluator:
     torch.manual_seed(cfg.seed)
-    env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed)
-
+    env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
     # Create the actor, the critic and its target, and the optimizers
 
     actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim)
