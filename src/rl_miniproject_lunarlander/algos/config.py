@@ -1,8 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class DDPGConfig:
-    env_name: str = "CartPoleContinuous-v1"
+    env_name: str = 'LunarLanderContinuous-v3'
+    env_kwargs: dict = field(default_factory=lambda: {})
     seed: int = 1
 
     #: Total number of environment steps
