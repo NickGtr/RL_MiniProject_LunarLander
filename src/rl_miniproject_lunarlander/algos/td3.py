@@ -24,7 +24,7 @@ from ..losses.critic_losses import compute_critic_loss
 
 def run_td3(cfg: TD3Config) -> Evaluator:
     torch.manual_seed(cfg.seed)
-    env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed)
+    env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
 
     # Create the actor, the two critics, their three targets and the optimizers
     actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim)
