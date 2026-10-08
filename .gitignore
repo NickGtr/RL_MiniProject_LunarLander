@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environnement virtuel (uv)
+.venv/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Outils / caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Résultats d'entraînement RL
+runs/
+logs/
+tensorboard/
+wandb/
+videos/
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+
+# Secrets
+.env
+
+# OS / éditeurs
+.DS_Store
+.vscode/
+.idea/
