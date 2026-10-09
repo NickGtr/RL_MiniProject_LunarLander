@@ -8,6 +8,10 @@ class DDPGConfig:
     monte_carlo_seed : int = 2
     monte_carlo_n_envs : int = 1
     mc_n_episodes : int = 100
+    #: Steps between two Monte Carlo checks of the critic (0 = disabled)
+    mc_interval : int = 0
+    #: Number of (s, a) pairs of the batch evaluated by Monte Carlo at each check
+    mc_n_samples : int = 5
 
     #: Total number of environment steps
     max_steps: int = 30_000

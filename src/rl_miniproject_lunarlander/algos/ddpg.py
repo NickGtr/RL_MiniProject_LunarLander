@@ -20,6 +20,7 @@ from ..actors.continuous_actor import ContinuousDeterministicActor, GaussianNois
 from ..critics.continuous_q_network import ContinuousQNetwork
 from ..losses.actor_losses import compute_actor_loss
 from ..losses.critic_losses import compute_critic_loss
+from ..evaluation.monte_carlo import MonteCarloQLogger
 
 
 def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
@@ -49,6 +50,8 @@ def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
         run_dir=run_dir,
         writer=SummaryWriter(run_dir),
     )
+
+    mc_logger = MonteCarloQLogger(cfg, evaluator.writer)
 
     pbar = tqdm(total=cfg.max_steps)
     while collector.steps < cfg.max_steps:
@@ -88,6 +91,7 @@ def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
 
         evaluator.writer.add_scalar("loss/critic", critic_loss.item(), collector.steps)
         evaluator.writer.add_scalar("loss/actor", actor_loss.item(), collector.steps)
+        mc_logger.run_if_needed(collector.steps, batch, actor, {"critic": critic})
         if result := evaluator.run_if_needed(collector.steps, actor):
             pbar.set_description(
                 f"eval={result.mean:7.1f} best={evaluator.best_reward:7.1f}"

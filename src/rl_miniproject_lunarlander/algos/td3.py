@@ -22,6 +22,7 @@ from ..actors.continuous_actor import ContinuousDeterministicActor, GaussianNois
 from ..critics.continuous_q_network import ContinuousQNetwork
 from ..losses.actor_losses import compute_actor_loss
 from ..losses.critic_losses import compute_critic_loss
+from ..evaluation.monte_carlo import MonteCarloQLogger
 
 def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
     torch.manual_seed(cfg.seed)
@@ -58,6 +59,8 @@ def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
     )
 
     updates = 0  # number of gradient steps (for the policy delay)
+    mc_logger = MonteCarloQLogger(cfg, evaluator.writer)
+
     pbar = tqdm(total=cfg.max_steps)
     while collector.steps < cfg.max_steps:
         buffer.add(collector.collect(cfg.steps_per_update))
@@ -112,6 +115,7 @@ def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
         soft_update(source=critic_2, target=target_critic_2, tau=cfg.tau)
         soft_update(source=actor, target=target_actor, tau=cfg.tau)
 
+        mc_logger.run_if_needed(collector.steps, batch, actor, {"critic_min": lambda o, a: torch.minimum(critic_1(o, a), critic_2(o, a))})
         if result := evaluator.run_if_needed(collector.steps, actor):
             pbar.set_description(
                 f"eval={result.mean:7.1f} best={evaluator.best_reward:7.1f}"

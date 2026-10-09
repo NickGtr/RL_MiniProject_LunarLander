@@ -10,7 +10,7 @@ from gymnasium.envs.box2d.lunar_lander import (
 import torch
 from torch import Tensor
 
-from typing import Any
+from typing import Any, Callable
 
 from rl_mind.core import Action, Actor
 from rl_mind.nn import build_mlp, soft_update
@@ -73,6 +73,46 @@ def monte_carlo_Q(
                 just_reset = step.done
 
     return torch.tensor(final_reward_list).float().mean()
+
+class MonteCarloQLogger:
+    """Every `cfg.mc_interval` steps, compares the critics' Q(s, a) with a Monte Carlo
+    estimate on the first `cfg.mc_n_samples` transitions of a (randomly sampled) batch,
+    and logs both to tensorboard. Does nothing if `cfg.mc_interval` is 0.
+    """
+    def __init__(self, cfg : DDPGConfig, writer):
+        self.cfg = cfg
+        self.writer = writer
+        self.next_step = cfg.mc_interval
+        self.env = None
+        if cfg.mc_interval > 0:
+            self.env = VecEnv(
+                cfg.env_name,
+                cfg.monte_carlo_n_envs,
+                seed=cfg.monte_carlo_seed,
+                wrappers=[ForceInitialStateWrapper],
+                **cfg.env_kwargs,
+            )
+
+    def run_if_needed(self, steps : int, batch, actor : Actor, critics : dict[str, Callable[[Tensor, Tensor], Tensor]]):
+        if self.env is None or steps < self.next_step:
+            return
+        while self.next_step <= steps:
+            self.next_step += self.cfg.mc_interval
+
+        obs = batch.obs[:self.cfg.mc_n_samples]
+        actions = batch.action.value[:self.cfg.mc_n_samples]
+        q_mc = torch.stack([
+            monte_carlo_Q(self.env, o, a, actor, self.cfg.mc_n_episodes, self.cfg.gamma)
+            for o, a in zip(obs, actions)
+        ])
+        self.writer.add_scalar("monte_carlo/q_mc", q_mc.mean().item(), steps)
+
+        with torch.no_grad():
+            for name, critic in critics.items():
+                q = critic(obs, actions)
+                self.writer.add_scalar(f"monte_carlo/q_{name}", q.mean().item(), steps)
+                # > 0 means the critic overestimates
+                self.writer.add_scalar(f"monte_carlo/bias_{name}", (q - q_mc).mean().item(), steps)
 
 class ForceInitialStateWrapper(gym.Wrapper):
     """One must set_initial_state of this environment so that
