@@ -20,31 +20,31 @@ from rl_mind.env import VecEnv
 from ..algos.config import DDPGConfig
 
 def monte_carlo_Q(
-        cfg : DDPGConfig,
+        forced_inital_env : VecEnv,
         initial_state : Tensor,
         initial_action : Tensor,
         actor : Actor,
-        n_episodes : int
+        n_episodes : int,
+        gamma : float,
         ):
-    
-    env = VecEnv(
-        env_name=cfg.env_name,
-        num_envs=cfg.monte_carlo_n_envs,
-        seed=cfg.monte_carlo_seed,
-        wrappers=[lambda env: ForceInitialStateWrapper(env, initial_state),]
-    )
 
     """Collect the Monte Carlo discounted reward of n full episodes by doing an action and then following the actor
     Used for MonteCarlo. The reset() method of the environment should reset to a given state.
     """
+    env = forced_inital_env
+
+    # VecEnv doesn't expose set_initial_state directly; delegate to each
+    # sub-environment that has been wrapped with ForceInitialStateWrapper.
+    for sub_env in env.gym_env.envs:
+        sub_env.set_initial_state(initial_state)
 
     steps = 0
     obs = env.reset()
-    just_reset = torch.zeros(cfg.monte_carlo_n_envs, dtype=torch.bool)
-    is_first_step = torch.ones(cfg.monte_carlo_n_envs, dtype=torch.bool)
-    first_action =  initial_action.unsqueeze(0).expand(cfg.monte_carlo_n_envs, -1)
+    just_reset = torch.zeros(env.num_envs, dtype=torch.bool)
+    is_first_step = torch.ones(env.num_envs, dtype=torch.bool)
+    first_action =  initial_action.unsqueeze(0).expand(env.num_envs, -1)
 
-    reward_lists: list[list[float]] = [[] for _ in range(cfg.monte_carlo_n_envs)]
+    reward_lists: list[list[float]] = [[] for _ in range(env.num_envs)]
     final_reward_list = []
     with torch.no_grad():
         while len(final_reward_list) < n_episodes:
@@ -52,7 +52,7 @@ def monte_carlo_Q(
             action_to_apply = torch.where(is_first_step[:, None], first_action, action.value)
             step = env.step(action_to_apply)
 
-            for i in range(cfg.monte_carlo_n_envs):
+            for i in range(env.num_envs):
                 if just_reset[i]:
                     # This environment was auto-resetting: nothing to record
                     continue
@@ -63,7 +63,7 @@ def monte_carlo_Q(
                 if step.done[i]:
                     q_sa = 0
                     for t, reward in enumerate(reward_lists[i]):
-                        q_sa += cfg.gamma ** t * reward
+                        q_sa += gamma ** t * reward
                     final_reward_list.append(q_sa)
                     reward_lists[i] = []
                     is_first_step[i] = True
@@ -75,8 +75,13 @@ def monte_carlo_Q(
     return torch.tensor(final_reward_list).float().mean()
 
 class ForceInitialStateWrapper(gym.Wrapper):
-    def __init__(self, env : gym.Env, initial_state : Any):
+    """One must set_initial_state of this environment so that
+        reset() method forces into initial_state when called.
+    """
+    def __init__(self, env : gym.Env):
         super().__init__(env)
+
+    def set_initial_state(self, initial_state : Any):
         self.initial_state = np.asarray(initial_state, dtype=np.float32)
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
