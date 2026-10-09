@@ -23,17 +23,16 @@ OPTUNA_DIR = Path("outputs/optuna")
 
 def suggest_config(trial: optuna.Trial, algo: str, max_steps: int, seed: int):
     """L'espace de recherche : les intervalles dans lesquels Optuna choisit les hyperparamètres"""
-    # Optuna n'accepte pas de tuples comme choix : on lui donne du texte, "64,64" -> (64, 64)
-    hidden = tuple(int(n) for n in trial.suggest_categorical("hidden", ["64,64", "256,256"]).split(","))
+    hidden = tuple(int(n) for n in trial.suggest_categorical("hidden", ["64,64", "128,128", "64,64,64"]).split(","))
     params = dict(
         max_steps=max_steps,
         seed=seed,
-        gamma=trial.suggest_categorical("gamma", [0.98, 0.99, 0.995]),
-        tau=trial.suggest_float("tau", 1e-3, 0.05, log=True),
-        lr_actor=trial.suggest_float("lr_actor", 1e-4, 1e-3, log=True),
-        lr_critic=trial.suggest_float("lr_critic", 1e-4, 1e-3, log=True),
-        batch_size=trial.suggest_categorical("batch_size", [64, 128, 256]),
-        action_noise=trial.suggest_float("action_noise", 0.05, 0.3),
+        gamma=0.98,
+        tau=0.05,
+        lr_actor=1e-4,
+        lr_critic=1e-4,
+        batch_size=128,
+        action_noise=0.05,
         actor_hidden=hidden,
         critic_hidden=hidden,
         eval_interval=5_000,
@@ -44,7 +43,7 @@ def suggest_config(trial: optuna.Trial, algo: str, max_steps: int, seed: int):
     return TD3Config(
         **params,
         policy_delay=trial.suggest_int("policy_delay", 1, 3),
-        target_noise=trial.suggest_float("target_noise", 0.1, 0.3),
+        target_noise=0.1,
     )
 
 
@@ -54,7 +53,7 @@ parser = argparse.ArgumentParser(
 # Sans --algo, argparse arrête le script
 parser.add_argument("--algo", choices=["ddpg", "td3"], required=True)
 parser.add_argument("--n_trials", type=int, default=20)
-parser.add_argument("--max_steps", type=int, default=10_000)
+parser.add_argument("--max_steps", type=int, default=100_000)
 parser.add_argument("--seeds", type=int, nargs="+", default=[1])
 args = parser.parse_args()
 
