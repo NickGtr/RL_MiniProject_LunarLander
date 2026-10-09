@@ -34,8 +34,8 @@ def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
                                      env.action_dim
                                      )
     target_actor = copy.deepcopy(actor)
-    critic_1 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
-    critic_2 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
+    critic_1 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.critic_layer_norm)
+    critic_2 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.critic_layer_norm)
     target_critic_1 = copy.deepcopy(critic_1)
     target_critic_2 = copy.deepcopy(critic_2)
     # one optimizer for the actor, one for both critics (give it the
@@ -50,7 +50,7 @@ def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
     if run_dir is None:
-        run_dir = run_directory(f"td3-{cfg.env_name}-S{cfg.seed}")
+        run_dir = run_directory(f"td3-{cfg.env_name}{'-LN' if cfg.critic_layer_norm else ''}-S{cfg.seed}")
     evaluator = Evaluator(
         VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100, **cfg.env_kwargs),
         every=cfg.eval_interval,

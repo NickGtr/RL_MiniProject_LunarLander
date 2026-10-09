@@ -32,7 +32,7 @@ def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
                                      cfg.actor_hidden,
                                      env.action_dim
                                      )  
-    critic = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
+    critic = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.critic_layer_norm)
     # the target critic is a copy of the critic (`copy.deepcopy`)
     target_critic = copy.deepcopy(critic)
     # one optimizer per network (`cfg.lr_actor`, `cfg.lr_critic`)
@@ -43,7 +43,7 @@ def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
     if run_dir is None:
-        run_dir = run_directory(f"ddpg-{cfg.env_name}-S{cfg.seed}")
+        run_dir = run_directory(f"ddpg-{cfg.env_name}{'-LN' if cfg.critic_layer_norm else ''}-S{cfg.seed}")
     evaluator = Evaluator(
         VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100, **cfg.env_kwargs),
         every=cfg.eval_interval,
