@@ -5,6 +5,9 @@ class DDPGConfig:
     env_name: str = 'LunarLanderContinuous-v3'
     env_kwargs: dict = field(default_factory=lambda: {})
     seed: int = 1
+    monte_carlo_seed : int = 2
+    monte_carlo_n_envs : int = 1
+    mc_n_episodes : int = 100
 
     #: Total number of environment steps
     max_steps: int = 30_000
