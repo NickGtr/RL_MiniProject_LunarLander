@@ -8,8 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 from .config import DDPGConfig
 
-import rl_mind.envs
-from rl_mind.core import Action, Actor
 from rl_mind.nn import soft_update
 from rl_mind.env import VecEnv
 from rl_mind.data import ReplayBuffer, Transitions
