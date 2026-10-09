@@ -5,7 +5,8 @@ class DDPGConfig:
     env_name: str = 'LunarLanderContinuous-v3'
     env_kwargs: dict = field(default_factory=lambda: {})
     seed: int = 1
-    monte_carlo_seed : int = 2
+    #: Seed of the Monte Carlo envs (None = seed + 1000, away from training and eval seeds)
+    monte_carlo_seed : int | None = None
     monte_carlo_n_envs : int = 1
     mc_n_episodes : int = 100
     #: Steps between two Monte Carlo checks of the critic (0 = disabled)
@@ -35,6 +36,8 @@ class DDPGConfig:
 
     actor_hidden: tuple[int, ...] = (64, 64)
     critic_hidden: tuple[int, ...] = (64, 64)
+    #: Add LayerNorm to the hidden layers of the critic(s)
+    critic_layer_norm: bool = False
     lr_actor: float = 1e-3
     lr_critic: float = 1e-3
 

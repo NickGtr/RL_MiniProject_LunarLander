@@ -88,7 +88,7 @@ class MonteCarloQLogger:
             self.env = VecEnv(
                 cfg.env_name,
                 cfg.monte_carlo_n_envs,
-                seed=cfg.monte_carlo_seed,
+                seed=cfg.monte_carlo_seed if cfg.monte_carlo_seed is not None else cfg.seed + 1000,
                 wrappers=[ForceInitialStateWrapper],
                 **cfg.env_kwargs,
             )
@@ -105,14 +105,19 @@ class MonteCarloQLogger:
             monte_carlo_Q(self.env, o, a, actor, self.cfg.mc_n_episodes, self.cfg.gamma)
             for o, a in zip(obs, actions)
         ])
-        self.writer.add_scalar("monte_carlo/q_mc", q_mc.mean().item(), steps)
+        self._log("q_mc", q_mc, steps)
 
         with torch.no_grad():
             for name, critic in critics.items():
                 q = critic(obs, actions)
-                self.writer.add_scalar(f"monte_carlo/q_{name}", q.mean().item(), steps)
+                self._log(f"q_{name}", q, steps)
                 # > 0 means the critic overestimates
-                self.writer.add_scalar(f"monte_carlo/bias_{name}", (q - q_mc).mean().item(), steps)
+                self._log(f"bias_{name}", q - q_mc, steps)
+
+    def _log(self, tag : str, values : Tensor, steps : int):
+        """Logs the mean over the sampled (s, a) pairs, and its standard error as `<tag>_se`"""
+        self.writer.add_scalar(f"monte_carlo/{tag}", values.mean().item(), steps)
+        self.writer.add_scalar(f"monte_carlo/{tag}_se", (values.std() / len(values) ** 0.5).item(), steps)
 
 class ForceInitialStateWrapper(gym.Wrapper):
     """One must set_initial_state of this environment so that
