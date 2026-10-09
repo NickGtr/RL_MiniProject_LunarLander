@@ -10,7 +10,7 @@ from gymnasium.envs.box2d.lunar_lander import (
 import torch
 from torch import Tensor
 
-from typing import Any
+from typing import Any, Callable
 
 from rl_mind.core import Action, Actor
 from rl_mind.nn import build_mlp, soft_update
@@ -20,31 +20,31 @@ from rl_mind.env import VecEnv
 from ..algos.config import DDPGConfig
 
 def monte_carlo_Q(
-        cfg : DDPGConfig,
+        forced_inital_env : VecEnv,
         initial_state : Tensor,
         initial_action : Tensor,
         actor : Actor,
-        n_episodes : int
+        n_episodes : int,
+        gamma : float,
         ):
-    
-    env = VecEnv(
-        env_name=cfg.env_name,
-        num_envs=cfg.monte_carlo_n_envs,
-        seed=cfg.monte_carlo_seed,
-        wrappers=[lambda env: ForceInitialStateWrapper(env, initial_state),]
-    )
 
     """Collect the Monte Carlo discounted reward of n full episodes by doing an action and then following the actor
     Used for MonteCarlo. The reset() method of the environment should reset to a given state.
     """
+    env = forced_inital_env
+
+    # VecEnv doesn't expose set_initial_state directly; delegate to each
+    # sub-environment that has been wrapped with ForceInitialStateWrapper.
+    for sub_env in env.gym_env.envs:
+        sub_env.set_initial_state(initial_state)
 
     steps = 0
     obs = env.reset()
-    just_reset = torch.zeros(cfg.monte_carlo_n_envs, dtype=torch.bool)
-    is_first_step = torch.ones(cfg.monte_carlo_n_envs, dtype=torch.bool)
-    first_action =  initial_action.unsqueeze(0).expand(cfg.monte_carlo_n_envs, -1)
+    just_reset = torch.zeros(env.num_envs, dtype=torch.bool)
+    is_first_step = torch.ones(env.num_envs, dtype=torch.bool)
+    first_action =  initial_action.unsqueeze(0).expand(env.num_envs, -1)
 
-    reward_lists: list[list[float]] = [[] for _ in range(cfg.monte_carlo_n_envs)]
+    reward_lists: list[list[float]] = [[] for _ in range(env.num_envs)]
     final_reward_list = []
     with torch.no_grad():
         while len(final_reward_list) < n_episodes:
@@ -52,7 +52,7 @@ def monte_carlo_Q(
             action_to_apply = torch.where(is_first_step[:, None], first_action, action.value)
             step = env.step(action_to_apply)
 
-            for i in range(cfg.monte_carlo_n_envs):
+            for i in range(env.num_envs):
                 if just_reset[i]:
                     # This environment was auto-resetting: nothing to record
                     continue
@@ -63,7 +63,7 @@ def monte_carlo_Q(
                 if step.done[i]:
                     q_sa = 0
                     for t, reward in enumerate(reward_lists[i]):
-                        q_sa += cfg.gamma ** t * reward
+                        q_sa += gamma ** t * reward
                     final_reward_list.append(q_sa)
                     reward_lists[i] = []
                     is_first_step[i] = True
@@ -74,9 +74,54 @@ def monte_carlo_Q(
 
     return torch.tensor(final_reward_list).float().mean()
 
+class MonteCarloQLogger:
+    """Every `cfg.mc_interval` steps, compares the critics' Q(s, a) with a Monte Carlo
+    estimate on the first `cfg.mc_n_samples` transitions of a (randomly sampled) batch,
+    and logs both to tensorboard. Does nothing if `cfg.mc_interval` is 0.
+    """
+    def __init__(self, cfg : DDPGConfig, writer):
+        self.cfg = cfg
+        self.writer = writer
+        self.next_step = cfg.mc_interval
+        self.env = None
+        if cfg.mc_interval > 0:
+            self.env = VecEnv(
+                cfg.env_name,
+                cfg.monte_carlo_n_envs,
+                seed=cfg.monte_carlo_seed,
+                wrappers=[ForceInitialStateWrapper],
+                **cfg.env_kwargs,
+            )
+
+    def run_if_needed(self, steps : int, batch, actor : Actor, critics : dict[str, Callable[[Tensor, Tensor], Tensor]]):
+        if self.env is None or steps < self.next_step:
+            return
+        while self.next_step <= steps:
+            self.next_step += self.cfg.mc_interval
+
+        obs = batch.obs[:self.cfg.mc_n_samples]
+        actions = batch.action.value[:self.cfg.mc_n_samples]
+        q_mc = torch.stack([
+            monte_carlo_Q(self.env, o, a, actor, self.cfg.mc_n_episodes, self.cfg.gamma)
+            for o, a in zip(obs, actions)
+        ])
+        self.writer.add_scalar("monte_carlo/q_mc", q_mc.mean().item(), steps)
+
+        with torch.no_grad():
+            for name, critic in critics.items():
+                q = critic(obs, actions)
+                self.writer.add_scalar(f"monte_carlo/q_{name}", q.mean().item(), steps)
+                # > 0 means the critic overestimates
+                self.writer.add_scalar(f"monte_carlo/bias_{name}", (q - q_mc).mean().item(), steps)
+
 class ForceInitialStateWrapper(gym.Wrapper):
-    def __init__(self, env : gym.Env, initial_state : Any):
+    """One must set_initial_state of this environment so that
+        reset() method forces into initial_state when called.
+    """
+    def __init__(self, env : gym.Env):
         super().__init__(env)
+
+    def set_initial_state(self, initial_state : Any):
         self.initial_state = np.asarray(initial_state, dtype=np.float32)
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
