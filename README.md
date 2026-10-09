@@ -38,3 +38,5 @@ de chaque entraînement dans `<algo>/trial_<n>/seed_<s>/`.
 
 - Les meilleurs hyperparamètres sont affichés à la fin, ou dans le tableau de bord :
   `uvx optuna-dashboard sqlite:///outputs/optuna/td3.db`
+- Les courbes d'apprentissage de chaque essai sont accessibles via TensorBoard :
+  `uv run tensorboard --logdir outputs/optuna/td3`
