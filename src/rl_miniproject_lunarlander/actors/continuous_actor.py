@@ -30,7 +30,9 @@ class GaussianNoise(Actor[Action]):
 
     def forward(self, obs: Tensor) -> Action:
         action = self.actor(obs).value
-        return Action(value=action + self.sigma * torch.randn_like(action))
+        noisy_action = action + self.sigma * torch.randn_like(action)
+        noisy_action = noisy_action.clamp(-1, 1)
+        return Action(value=noisy_action)
 
     def act(self, obs: Tensor) -> Tensor:
         return self.actor.act(obs)

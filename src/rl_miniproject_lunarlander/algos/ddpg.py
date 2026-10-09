@@ -8,8 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 from .config import DDPGConfig
 
-import rl_mind.envs
-from rl_mind.core import Action, Actor
 from rl_mind.nn import soft_update
 from rl_mind.env import VecEnv
 from rl_mind.data import ReplayBuffer, Transitions
@@ -28,7 +26,10 @@ def run_ddpg(cfg: DDPGConfig) -> Evaluator:
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
     # Create the actor, the critic and its target, and the optimizers
 
-    actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim)
+    actor = ContinuousDeterministicActor(env.observation_dim,
+                                     cfg.actor_hidden,
+                                     env.action_dim
+                                     )  
     critic = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
     # the target critic is a copy of the critic (`copy.deepcopy`)
     target_critic = copy.deepcopy(critic)

@@ -27,13 +27,15 @@ def run_td3(cfg: TD3Config) -> Evaluator:
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
 
     # Create the actor, the two critics, their three targets and the optimizers
-    actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim)
-
+    actor = ContinuousDeterministicActor(env.observation_dim,
+                                     cfg.actor_hidden,
+                                     env.action_dim
+                                     )
     target_actor = copy.deepcopy(actor)
     critic_1 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
-    critic_2 = copy.deepcopy(critic_1)
+    critic_2 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim)
     target_critic_1 = copy.deepcopy(critic_1)
-    target_critic_2 = copy.deepcopy(critic_1)
+    target_critic_2 = copy.deepcopy(critic_2)
     # one optimizer for the actor, one for both critics (give it the
     # parameters of both)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=cfg.lr_actor)
@@ -68,7 +70,7 @@ def run_td3(cfg: TD3Config) -> Evaluator:
 
             next_actions = target_actor(batch.next_obs).value
             next_actions += (cfg.target_noise * torch.randn_like(next_actions)).clamp(-cfg.target_noise_clip, cfg.target_noise_clip)
-
+            next_actions=next_actions.clamp(-1, 1)
             # Clipped double-Q: a single target, from the min of the two target critics
             next_q_values_1 = target_critic_1(batch.next_obs, next_actions)
             next_q_values_2 = target_critic_2(batch.next_obs, next_actions)
