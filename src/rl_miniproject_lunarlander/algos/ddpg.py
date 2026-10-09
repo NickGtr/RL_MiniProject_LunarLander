@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,7 +24,7 @@ from ..losses.actor_losses import compute_actor_loss
 from ..losses.critic_losses import compute_critic_loss
 
 
-def run_ddpg(cfg: DDPGConfig) -> Evaluator:
+def run_ddpg(cfg: DDPGConfig, run_dir: Path | None = None) -> Evaluator:
     torch.manual_seed(cfg.seed)
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
     # Create the actor, the critic and its target, and the optimizers
@@ -39,9 +40,10 @@ def run_ddpg(cfg: DDPGConfig) -> Evaluator:
     # Data collection (with exploration noise), replay buffer and evaluation
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
-    run_dir = run_directory(f"ddpg-{cfg.env_name}-S{cfg.seed}")
+    if run_dir is None:
+        run_dir = run_directory(f"ddpg-{cfg.env_name}-S{cfg.seed}")
     evaluator = Evaluator(
-        VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100),
+        VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100, **cfg.env_kwargs),
         every=cfg.eval_interval,
         run_dir=run_dir,
         writer=SummaryWriter(run_dir),

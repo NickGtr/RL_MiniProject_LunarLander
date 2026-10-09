@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +23,7 @@ from ..critics.continuous_q_network import ContinuousQNetwork
 from ..losses.actor_losses import compute_actor_loss
 from ..losses.critic_losses import compute_critic_loss
 
-def run_td3(cfg: TD3Config) -> Evaluator:
+def run_td3(cfg: TD3Config, run_dir: Path | None = None) -> Evaluator:
     torch.manual_seed(cfg.seed)
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, **cfg.env_kwargs)
 
@@ -45,9 +46,10 @@ def run_td3(cfg: TD3Config) -> Evaluator:
     # Data collection (with exploration noise), replay buffer and evaluation
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
-    run_dir = run_directory(f"td3-{cfg.env_name}-S{cfg.seed}")
+    if run_dir is None:
+        run_dir = run_directory(f"td3-{cfg.env_name}-S{cfg.seed}")
     evaluator = Evaluator(
-        VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100),
+        VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100, **cfg.env_kwargs),
         every=cfg.eval_interval,
         run_dir=run_dir,
         writer=SummaryWriter(run_dir),
